@@ -1,0 +1,30 @@
+# textdomain: skills
+# author(s):
+# reviewer(s):
+# @n means "newline"
+# @<number> (@1, @2, ecc) is a value that the mod will pass at runtime
+
+##[ src/commands.lua ]##
+prefix=préfixe
+player=joueur
+skill=compétence
+The skill @1 doesn't exist!=La compétence @1 n''existe pas !
+@1 already has that skill=@1 possède déjà cette compétence
+@1 skill unlocked to @2=Compétence @1 débloquée pour @2
+@1 doesn't have that skill=@1 n''a pas cette compétence
+@1 skill removed from @2=Compétence @1 retirée de @2
+The @1 skill is already disabled=La compétence @1 est déjà désactivée
+@1 skill disabled to @2=Compétence @1 désactivée pour @2
+The @1 skill is already enabled=La compétence @1 est déjà activée
+@1 skill enabled to @2=Compétence @1 activée pour @2
+Database flushed=La base de donnée a été mélangée
+lists every registered skill=liste toutes les compétences enregistrées
+lists all the skills of the specified player=liste toutes les compétences du joueur désigné
+removes any unregistered skill from the database=supprime toute compétence non enregistrée de la base de données
+
+##[ src/cooldown.lua ]##
+You have to wait @1 seconds to use this again!=Vous devez attendre @1 secondes pour l''utiliser à nouveau !
+
+##[ src/core.lua ]##
+You can't use the @1 skill now=Vous ne pouvez utiliser la compétence @1 de suite
+No description.=Aucune description.

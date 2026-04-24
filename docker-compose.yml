@@ -1,0 +1,36 @@
+networks:
+  luanti_network2:
+    driver: bridge
+
+services:
+  luanti:
+    image: ghcr.io/luanti-org/luanti:5.15.0
+    container_name: survival_shelter
+    command: >
+      ./bin/minetestserver --config /home/minetest/.minetest/minetest.conf --world /home/minetest/.minetest/worlds/survival_shelter
+    ports:
+      - "30000:30000/udp"
+      - "30000:30000/tcp"
+    volumes:
+      - ./luanti_files:/home/minetest/.minetest/
+    environment:
+      - HOME=/home/minetest
+    restart: always
+    networks:
+      - luanti_network2
+    depends_on:
+      - discordmt2
+
+  discordmt2:
+    image: python:3.11-slim
+    container_name: discordmt2
+    working_dir: /app
+    command: >
+      sh -c "pip install aiohttp discord.py && python server.py"
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./luanti_files/games/minetest_game/mods/discordmt:/app
+    restart: always
+    networks:
+      - luanti_network2

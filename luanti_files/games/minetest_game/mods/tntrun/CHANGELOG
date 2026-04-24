@@ -1,0 +1,17 @@
+Changelog
+0.5:
+- TNT fall down now
+- Bugfixes
+0.6:
+- Reseting
+0.7:
+- Added Killerblock
+- Bugfixes
+- Intrucion in Chat
+0.8:
+- German translation
+- Updatet discription of TNT
+0.9:
+- After one secoind tnt fall down now, if you walk over it.
+- Set now your hub_spawnpoint in settings.lua after win, lose or quit the tntrun
+arena

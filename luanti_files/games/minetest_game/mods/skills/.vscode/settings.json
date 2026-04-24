@@ -1,0 +1,46 @@
+{
+    "Lua.diagnostics.globals": [
+        "minetest",
+        "player_monoids",
+        "audio_lib"
+    ],
+    "Lua.diagnostics.disable": [
+        "need-check-nil",
+        "undefined-field",
+        "lowercase-global",
+        "deprecated"
+    ],
+    "helium-icon-theme.activeIconPack": "react",
+    "helium-icon-theme.folders.associations": {
+        "*textures*": "Images",
+        "IGNOREME": "Private",
+        "gui": "Client",
+        "hud": "Layout"
+    },
+    "helium-icon-theme.files.associations": {
+
+        "DOCS.md": "Lib",
+        "*.tr": "I18n",
+        "template.txt": "Settings",
+        "init.lua": "Makefile",
+        ".luacheckrc": "",
+        "SETTINGS.lua": "Settings"
+    },
+    "helium-icon-theme.opacity": 0.8,
+    "helium-icon-theme.folders.theme": "classic",
+    "helium-icon-theme.saturation": 1,
+    "editor.cursorBlinking": "smooth",
+    "editor.cursorSmoothCaretAnimation": "explicit",
+    "editor.bracketPairColorization.independentColorPoolPerBracketType": false,
+    "editor.guides.bracketPairs": "active",
+    "Lua.format.defaultConfig": {
+        "indent_style": "space",
+        "indent_size": "3",
+        "line_space_after_function_statement": "min(4)",
+        "max_line_length": "unset",
+        "align_call_args": "false",
+        "align_continuous_assign_statement": "false",
+        "align_continuous_rect_table_field = false": "false",
+        "space_around_table_field_list": "false"
+    }
+}

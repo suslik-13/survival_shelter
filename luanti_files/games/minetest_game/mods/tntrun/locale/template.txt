@@ -1,0 +1,16 @@
+# textdomain: tntrun
+
+# init.lua
+
+
+# nodes.lua
+Killer=
+
+# tnt.lua
+TNT in tntrun=
+Torch for TNT=
+
+# auto.lua
+How it work:=
+Punch with torches TNT to fight with other players=
+But warning, the TNT on which you standing fall down=

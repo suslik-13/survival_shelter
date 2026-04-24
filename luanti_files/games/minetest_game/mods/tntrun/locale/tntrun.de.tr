@@ -1,0 +1,16 @@
+# textdomain: tntrun
+
+# init.lua
+
+
+# nodes.lua
+Killer=Töter
+
+# tnt.lua
+TNT in tntrun= TNT in tntrennen
+Torch for TNT=Fackel für TNT
+
+# auto.lua
+How it work:=Wie es geht:
+Punch with torches TNT to fight with other players=Schlage mit Fackeln TNT um mit anderen Spielern zu kämpfen
+But warning, the TNT on which you standing fall down=Aber Achtung, das TNT auf den du stehst fällt herunter

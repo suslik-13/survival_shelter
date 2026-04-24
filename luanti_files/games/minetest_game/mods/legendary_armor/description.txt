@@ -1,0 +1,1 @@
+adds Legendary ingots, armor, and tools. compatible with legendary_ore

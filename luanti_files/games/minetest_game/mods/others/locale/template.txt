@@ -1,0 +1,5 @@
+# textdomain:mobs_others
+
+Obsidian Sword=
+Snow Walker=
+Ice Monster=
