@@ -20,10 +20,10 @@ Python 3.8+, `aiohttp` 3.7.4+ and `discord.py` 2.0.0+ are required.
 2. Create an application at the [Discord Developer Dashboard](https://discordapp.com/developers/applications/) and enable it as a bot (in the Bot tab.) Also enable the **Message Content Intent**.
 3. Copy the token from your newly-created bot, and use it to finish setting up `relay.conf`.
 
-Example `relay.conf`: *(The token shown below has been regenerated)*
+Example `relay.conf`: 
 ```
 [BOT]
-token = NjEwODk0MDU4ODY4NzAzMjMz.XVL5dA.8j8d2XN8_5UwRheG91P2XksYDoM
+token = YOUR_BOT_TOKEN
 command_prefix = !
 [RELAY]
 port = 8080
