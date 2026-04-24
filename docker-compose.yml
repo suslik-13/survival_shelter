@@ -4,7 +4,7 @@ networks:
 
 services:
   luanti:
-    image: ghcr.io/luanti-org/luanti:5.15.0
+    image: ghcr.io/luanti-org/luanti:5.15.2
     container_name: survival_shelter
     command: >
       ./bin/minetestserver --config /home/minetest/.minetest/minetest.conf --world /home/minetest/.minetest/worlds/survival_shelter
