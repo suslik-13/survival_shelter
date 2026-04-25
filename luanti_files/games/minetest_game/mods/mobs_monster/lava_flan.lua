@@ -322,8 +322,8 @@ mobs:register_arrow("mobs_monster:obsidian_arrow", {
 		end
 
 		-- do not break obsidian or diamond blocks or unbreakable nodes
-		if (def.groups and def.groups.level and def.groups.level > 1)
-		or def.groups.unbreakable then
+		if def and (def.groups and def.groups.level and def.groups.level > 1)
+		or def and  def.groups.unbreakable then
 			return
 		end
 

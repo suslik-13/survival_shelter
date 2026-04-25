@@ -1,10 +1,16 @@
 
+-- mineclone check
+
+local mod_mcl = core.get_modpath("mcl_core")
+
+-- jellyfish definition
+
 mobs:register_mob("mobs_jellyfish:jellyfish", {
-	type = "animal",
+	type = "monster",
 	attack_type = "dogfight",
 	passive = false,
 	damage = 5,
-	reach = 1,
+	reach = 1.1,
 	hp_min = 5,
 	hp_max = 10,
 	armor = 100,
@@ -18,7 +24,8 @@ mobs:register_mob("mobs_jellyfish:jellyfish", {
 	walk_velocity = 0.1,
 	run_velocity = 0.1,
 	fly = true,
-	fly_in = "default:water_source",
+	fly_in = (mod_mcl and "mcl_core:water_source" or "default:water_source"),
+	stepheight = 0,
 	fall_speed = 0,
 	view_range = 10,
 	water_damage = 0,
@@ -30,19 +37,32 @@ mobs:register_mob("mobs_jellyfish:jellyfish", {
 	end
 })
 
+-- Check for custom spawn.lua
 
-mobs:spawn({
-	name = "mobs_jellyfish:jellyfish",
-	nodes = {"default:water_source"},
-	neighbors = {"default:water_flowing", "default:water_source"},
-	min_light = 5,
-	interval = 30,
-	chance = 10000,
-	max_height = 0
-})
+local MP = core.get_modpath(core.get_current_modname()) .. "/"
+local input = io.open(MP .. "spawn.lua", "r")
 
+if input then
+	input:close() ; input = nil ; dofile(MP .. "spawn.lua")
+else
+	mobs:spawn({
+		name = "mobs_jellyfish:jellyfish",
+		nodes = {(mod_mcl and "mcl_core:water_source" or "default:water_source")},
+		neighbors = {"group:water"},
+		min_light = 5,
+		interval = 30,
+		chance = 10000,
+		max_height = 0
+	})
+end
+
+-- spawn egg
 
 mobs:register_egg("mobs_jellyfish:jellyfish", "Jellyfish", "jellyfish_inv.png", 0)
+
+-- compatibility
+
+core.register_alias("mobs_jellyfish:jellyfish_set", "mobs_jellyfish:jellyfish")
 
 
 print("[MOD] Mobs Redo Jellyfish loaded")
