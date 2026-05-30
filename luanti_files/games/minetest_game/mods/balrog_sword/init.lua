@@ -65,7 +65,7 @@ minetest.register_craft({
 	}
 })
 
---[[
+
 -- Add [toolranks] mod support if found
 if minetest.get_modpath("toolranks") then
 
@@ -80,7 +80,7 @@ if minetest.get_modpath("toolranks") then
 	end
 
 	add_tool("balrog_sword:balrog_sword", "Balrog Sword", true)
-	add_tool("ebitems:flaming_sword", "Flaming Sword", true)
+	--add_tool("ebitems:flaming_sword", "Flaming Sword", true)
 end
---]]
+
 

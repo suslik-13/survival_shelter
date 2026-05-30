@@ -49,7 +49,7 @@ minetest.register_tool("mobs_balrog:balrog_whip", {
 	range = 6,
 	tool_capabilities = whip_tool_capabilities,
 	on_use = on_use,
-	--on_place = on_rightclick,
-	--on_secondary_use = on_rightclick,
+	on_place = on_rightclick,
+	on_secondary_use = on_rightclick,
 	on_blast = on_blast,
 })
