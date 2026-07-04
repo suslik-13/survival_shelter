@@ -12,7 +12,7 @@ Here, survival is not a game mode - it’s a state of mind. PvP is inevitable. B
  - Beautiful builds are welcome
  - PvP is allowed and encouraged
 
-**Discord community:** https://discord.gg/JUFdNDWAcu
+**Discord community:** https://discord.gg/j7ZHrgDTrn
 
 ## Server Launch
 
@@ -115,6 +115,6 @@ more info: https://content.luanti.org/packages/archfan7411/discordmt/
 
 ## Support
 
-If you have problems or questions, join our Discord server: https://discord.gg/JUFdNDWAcu
+If you have problems or questions, join our Discord server: https://discord.gg/j7ZHrgDTrn
 
 ---
