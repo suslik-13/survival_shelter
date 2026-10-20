@@ -78,6 +78,7 @@ stepheight = 0.6,
 			self.type = "monster"
 			self.health = 20
 			self.passive = false
+			self.attack_players = true
 			self.runaway = false
 
 			return

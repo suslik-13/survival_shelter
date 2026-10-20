@@ -3204,6 +3204,12 @@ function mobs:register_mob(name, def)
 		collisionbox[5] = collisionbox[2] + 0.99
 	end
 
+	-- only monsters attack players unprovoked unless mob definition says otherwise,
+	-- animals and npcs will still fight back when hit (passive = false)
+	local attack_players = def.attack_players
+
+	if attack_players == nil then attack_players = def.type == "monster" end
+
 	core.register_entity(":" .. name, setmetatable({
 
 		initial_properties = {
@@ -3304,7 +3310,7 @@ function mobs:register_mob(name, def)
 		group_helper = def.group_helper,
 		attack_monsters = def.attacks_monsters or def.attack_monsters,
 		attack_animals = def.attack_animals,
-		attack_players = def.attack_players,
+		attack_players = attack_players,
 		attack_npcs = def.attack_npcs,
 		attack_ignore = def.attack_ignore,
 		specific_attack = def.specific_attack,
