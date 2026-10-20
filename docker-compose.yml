@@ -4,7 +4,7 @@ networks:
 
 services:
   luanti:
-    image: ghcr.io/luanti-org/luanti:5.15.2
+    image: ghcr.io/luanti-org/luanti:5.17.0
     container_name: survival_shelter
     command: >
       ./bin/minetestserver --config /home/minetest/.minetest/minetest.conf --world /home/minetest/.minetest/worlds/survival_shelter
@@ -18,8 +18,8 @@ services:
     restart: always
     networks:
       - luanti_network2
-    depends_on:
-      - discordmt2
+#    depends_on:
+#      - discordmt2
 
   discordmt2:
     image: python:3.11-slim
