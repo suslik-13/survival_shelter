@@ -48,6 +48,28 @@ end
 
 minetest.register_alias("witches:chest_locked", "default:chest_locked")
 
+-- witches' chests can be blown up with TNT, player locked chests stay blast proof
+for _, chest_name in ipairs({"default:chest_locked", "default:chest_locked_open"}) do
+    local def = minetest.registered_nodes[chest_name]
+    if def then
+        local old_on_blast = def.on_blast
+        minetest.override_item(chest_name, {
+            on_blast = function(pos, intensity)
+                local meta = minetest.get_meta(pos)
+                if meta:get_string("secret_type") ~= "witches_chest" then
+                    if old_on_blast then return old_on_blast(pos, intensity) end
+                    return
+                end
+                local drops = {}
+                default.get_inventory_drops(pos, "main", drops)
+                drops[#drops + 1] = "default:chest_locked"
+                minetest.remove_node(pos)
+                return drops
+            end
+        })
+    end
+end
+
 minetest.register_alias("witches:spawn_node", "air")
 
 minetest.register_node("witches:tree", {

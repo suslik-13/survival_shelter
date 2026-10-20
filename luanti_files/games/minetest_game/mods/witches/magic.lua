@@ -200,3 +200,73 @@ function witches.magic.splash(self,target,volume,height,node)
 
 
 end
+-- witch wands in the hands of a player turn hostile mobs into sheep
+
+local wand_range = 16
+local wand_uses = 50
+local wand_max_target_hp = 100 -- bosses are too strong for this spell
+
+local function is_hostile_mob(ent)
+  if not ent or not ent._cmi_is_mob or ent.tamed or ent.health <= 0 then
+    return false
+  end
+  if ent.type == "monster" then return true end
+  return ent.attack_players and not ent.passive
+end
+
+function witches.magic.wand_polymorph(itemstack, user, pointed_thing)
+  if not user or not user:is_player() then return end
+
+  local eye = vector.add(user:get_pos(),
+      vector.new(0, user:get_properties().eye_height, 0))
+  local look_end = vector.add(eye,
+      vector.multiply(user:get_look_dir(), wand_range))
+
+  local target
+  for pointed in minetest.raycast(eye, look_end, true, false) do
+    if pointed.type == "object" and pointed.ref ~= user then
+      target = pointed.ref
+      break
+    elseif pointed.type == "node" then
+      break
+    end
+  end
+
+  local ent = target and target:get_luaentity()
+  if not is_hostile_mob(ent) then
+    -- not a spell target, so just hit whatever is in reach like a normal tool
+    if pointed_thing.type == "object" then
+      pointed_thing.ref:punch(user, 1.0, itemstack:get_tool_capabilities(),
+          user:get_look_dir())
+    end
+    return
+  end
+
+  if (target:get_properties().hp_max or 0) > wand_max_target_hp then
+    minetest.chat_send_player(user:get_player_name(),
+        "This creature is too powerful for your wand!")
+    return
+  end
+
+  local target_pos = target:get_pos()
+  minetest.sound_play("witches_magic02", {
+    pos = target_pos,
+    gain = 1.0,
+    max_hear_distance = 32
+  }, true)
+  witches.magic.effect_line01(eye, target_pos, 50)
+  local vol = pos_to_vol(target_pos, vector.new(2,2,2))
+  witches.magic.effect_area01(vol[1], vol[2], 200)
+
+  target:remove()
+  minetest.add_entity(target_pos, witches.sheep[math.random(1, #witches.sheep)])
+
+  if not minetest.is_creative_enabled(user:get_player_name()) then
+    itemstack:add_wear_by_uses(wand_uses)
+  end
+  return itemstack
+end
+
+for _, wand in ipairs({"witches:witch_wand_sp", "witches:witch_wand_btb"}) do
+  minetest.override_item(wand, {on_use = witches.magic.wand_polymorph})
+end

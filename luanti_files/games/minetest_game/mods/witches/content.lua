@@ -1,4 +1,5 @@
 local witches_db = minetest.get_mod_storage()
+witches.storage = witches_db
 
 witches.data_check = witches_db:to_table()["fields"]
 

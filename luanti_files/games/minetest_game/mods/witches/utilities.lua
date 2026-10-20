@@ -459,6 +459,50 @@ function witches.award_witches_chest(self, player)
     end
 end
 
+-- gives the player a key that opens the witch's chest, the chest itself stays sealed
+-- for everyone else, so every helpful player can earn their own key
+function witches.award_witches_key(self, player)
+    if not minetest.registered_items["keys:key"] or not self.witches_chest or
+        not self.witches_chest_pos then return end
+
+    local pos = self.witches_chest_pos
+    local node = minetest.get_node(pos)
+    local meta = minetest.get_meta(pos)
+    if not string.find(node.name, "chest_locked") or
+        meta:get_string("secret_type") ~= "witches_chest" then
+        return -- chest was destroyed or replaced
+    end
+
+    local secret = meta:get_string("key_lock_secret")
+    if secret == "" then
+        secret = string.format("%04x%04x%04x%04x", mr(2 ^ 16) - 1,
+                               mr(2 ^ 16) - 1, mr(2 ^ 16) - 1, mr(2 ^ 16) - 1)
+        meta:set_string("key_lock_secret", secret)
+    end
+
+    local key = ItemStack("keys:key")
+    local key_meta = key:get_meta()
+    key_meta:set_string("secret", secret)
+    key_meta:set_string("description",
+                        S("Key to @1's magic chest at @2", self.secret_name,
+                          minetest.pos_to_string(pos)))
+
+    local inv = player:get_inventory()
+    local leftover = inv:add_item("main", key)
+    local reward_text
+    if leftover:is_empty() then
+        reward_text = S(
+                          "You receive the key to the magic chest of @1 located at @2!",
+                          self.secret_name, minetest.pos_to_string(pos))
+    else
+        minetest.add_item(player:get_pos(), leftover)
+        reward_text = S(
+                          "You receive the key to the magic chest of @1 located at @2, but you cannot carry it",
+                          self.secret_name, minetest.pos_to_string(pos))
+    end
+    return {r_text = reward_text, r_item = "keys:key"}
+end
+
 function witches.claim_witches_chest(self)
     local pos = self.object:get_pos()
     pos.min = vector.subtract(pos, 10)
@@ -617,10 +661,18 @@ function witches.take_item(self, clicker)
         witches.debug(self.secret_name .. " has now received " ..
                           self.players[pname].favors .. " favors from " .. pname,
                       "witches.found_item")
+        local favors = self.players[pname].favors
+        if math.fmod(favors, 2) == 0 and not self.players[pname].got_key then
+            -- every 2 favors the witch tries to hand out a key to her chest
+            reward = witches.award_witches_key(self, clicker)
+        end
+        if reward and reward.r_text then
+            self.players[pname].got_key = true
         --every 5 favors give something special
-        if self.players[pname].favors >= 5 and math.fmod(self.players[pname].favors,5) == 0
-        then
-            if self.witches_chest and self.witches_chest_owner ==
+        elseif favors >= 5 and math.fmod(favors, 5) == 0 then
+            -- without keys mod the chest itself is handed over instead
+            if not minetest.registered_items["keys:key"] and
+                self.witches_chest and self.witches_chest_owner ==
                 self.secret_name then
                 reward = witches.award_witches_chest(self, clicker)
             else

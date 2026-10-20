@@ -1,7 +1,7 @@
 -- this file is copyright (c) 2020 Francisco Athens licensed under the terms of the MIT license
 local dungeon_cellar_chance = tonumber(minetest.settings:get(
                                            "witches_dungeon_cellar_chance")) or
-                                  2
+                                  60
 
 local dungeon_cellar_depth_min = tonumber(
                                      minetest.settings:get(

@@ -19,6 +19,26 @@ local rnd_color = witches.rnd_color
 local rnd_colors = witches.rnd_colors
 local hair_colors = witches.hair_colors
 
+-- wandering witches are a rare find: only one may spawn naturally
+-- per cooldown period (real seconds) on the whole server
+local spawn_cooldown = tonumber(minetest.settings:get(
+                                    "witches_spawn_cooldown")) or 10800
+
+local cooldown_mobs = {
+    ["witches:witch_generic"] = true,
+    ["witches:witch_cottage_builder"] = true
+}
+
+local old_spawn_abm_check = mobs.spawn_abm_check
+
+function mobs:spawn_abm_check(pos, node, name)
+    if cooldown_mobs[name] and os.time() -
+        witches.storage:get_int("last_wild_spawn") < spawn_cooldown then
+        return true
+    end
+    return old_spawn_abm_check(self, pos, node, name)
+end
+
 local spawning = {
     cottage = {
         -- nodes = {"group:wood","group:choppy","default:cobble"},
@@ -59,13 +79,14 @@ local spawning = {
         neighbors = {"air"},
         min_light = 5,
         max_light = 15,
-        interval = 30,
-        chance = 16000,
+        interval = 60,
+        chance = 64000,
         active_object_count = 1,
         min_height = -10,
         max_height = 200,
         day_toggle = nil,
         on_spawn = function(self)
+            witches.storage:set_int("last_wild_spawn", os.time())
             local pos = self.object:get_pos()
             witches.debug(self.secret_name .. " spawned at " ..
                               minetest.pos_to_string(vector.round(pos)),
@@ -137,7 +158,7 @@ witches.witch_types = {
 
             do_custom_addendum = function(self)
                 if witches.cottages then
-                    if not self.built_house and mr(10000) == 1 then
+                    if not self.built_house and mr(200000) == 1 then
                         witches.debug(self.secret_name .. " grounding...",
                                       "Witch Spawning")
                         local volume = witches.grounding(self.object:get_pos())
@@ -155,6 +176,7 @@ witches.witch_types = {
                             --]]
                             witches.generate_cottage(volume[1], volume[2], nil,
                                                      self.secret_name)
+                            witches.claim_witches_chest(self)
 
                         end
                     end
