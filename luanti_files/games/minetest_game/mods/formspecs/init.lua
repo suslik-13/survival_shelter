@@ -432,7 +432,7 @@ minetest.register_chatcommand( "fs", {
 				.. default.gui_bg
 				.. default.gui_bg_img
 
-				.. "label[0.1,6.7;ActiveFormspecs v2.6"
+				.. "label[0.1,6.7;ActiveFormspecs v2.6]"
 				.. string.format( "label[0.1,0.0;%s]label[0.1,0.5;%d min %02d sec]",
 					minetest.colorize( "#888888", "uptime:" ), math.floor( uptime / 60 ), uptime % 60 )
 				.. string.format( "label[5.6,0.0;%s]label[5.6,0.5;%d]",

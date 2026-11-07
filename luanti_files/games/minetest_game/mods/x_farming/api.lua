@@ -2819,7 +2819,7 @@ function x_farming.register_pie(name, def)
             elseif core.get_modpath('stamina') and core.global_exists('stamina') then
                 -- extra check for global variable since there are some mods called "stamina" without registering global "stamina" namespace
                 -- @see https://content.core.net/threads/6791/
-                stamina.change_saturation(clicker, _def.item_eat)
+                stamina.change(clicker, _def.item_eat)
                 sound_name = 'stamina_eat'
             elseif core.get_modpath('mcl_hunger') then
                 local h = mcl_hunger.get_hunger(clicker)

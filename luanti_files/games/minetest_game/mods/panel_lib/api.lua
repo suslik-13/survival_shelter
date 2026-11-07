@@ -27,7 +27,7 @@ Panel = {
         position  = {x = 1, y = 0.5},
         alignment = {x = 0, y = 0},
         offset    = {x = 0, y = 0},
-        size      = { x = 1 },
+        size      = { x = 1, y = 0 },
         number    = 0xFFFFFF,
         text      = ""
     },

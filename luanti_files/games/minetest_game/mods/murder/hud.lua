@@ -15,7 +15,7 @@ function murder.generate_HUD(arena, pl_name)
     position  = {x = 1, y = 0},
     offset = {x = -179, y = 32},
     text      = pl_role.HUD_timer or "HUD_murder_timer.png",
-    alignment = { x = 1.0},
+    alignment = { x = 1.0, y = 0},
     scale     = { x = 1.15, y = 1.15},
     number    = 0xFFFFFF,
     z_index = 100
@@ -27,7 +27,7 @@ function murder.generate_HUD(arena, pl_name)
     position  = {x = 1, y = 0},
     offset = {x = -51, y = 32},
     text      = arena.initial_time,
-    alignment = { x = 1.0},
+    alignment = { x = 1.0, y = 0},
     scale     = { x = 2, y = 2},
     number    = 0xFFFFFF,
     z_index = 100,
@@ -39,7 +39,7 @@ function murder.generate_HUD(arena, pl_name)
     position  = {x = 1, y = 0},
     offset = {x = -136, y = 32},
     text      = role,
-    alignment = { x = 0},
+    alignment = { x = 0, y = 0},
     scale     = { x = 100, y = 10},
     number    = 0xFFFFFF,
     z_index = 100

@@ -8,7 +8,7 @@ function arena_lib.HUD_add(player)
     position  = { x = 0.5, y = 0.5},
     offset    = { x = 0,   y = -155},
     text      = "",
-    size      = { x = 2},
+    size      = { x = 2, y = 0},
     number    = 0xFFFFFF,
     z_index   = 1100
   })
