@@ -3,7 +3,8 @@
 -- nodes (up to 64) and brings them to you, dropping them at your feet; if
 -- a note block (mesecons) played within 16 nodes of it in the last 30 s,
 -- it brings them there instead. It follows its owner, cannot be hurt by
--- them, and gives the item back to an empty hand. Jukeboxes and amethyst do
+-- them, and gives the item back to an empty hand; then only the owner can
+-- give it a new one. Jukeboxes and amethyst do
 -- not exist here, so it neither dances nor duplicates.
 local S = cb_mobs_animals.S
 local A = cb_mobs_animals
@@ -37,7 +38,8 @@ function A.allay_give(self, clicker)
 		A.hold(self, nil)
 		return true
 	end
-	if stack:is_empty() then
+	-- a bonded allay takes a new item from its owner only
+	if stack:is_empty() or (self.tamed and (self.owner or "") ~= "" and clicker:get_player_name() ~= self.owner) then
 		return false
 	end
 	self._want = stack:get_name()
