@@ -18,6 +18,10 @@ nether_enable_portal_example_floatlands (Enable example portal: Floatlands) bool
 # Enables the Surface-travel portal api code example
 nether_enable_portal_example_surfacetravel (Enable example portal: Surface-travel) bool false
 
+# Light level (0-14) of Netherrack and Nethersand, so that the Nether is not pitch-dark.
+# 0 disables it. Already generated areas are relit once when they are loaded.
+nether_rock_light (Light level of Nether rock) int 7 0 14
+
 [Nether depth]
 #The depth where the Nether begins / the Nether ceiling
 nether_depth_ymax (Upper limit of Nether) int -5000 -30000 32767

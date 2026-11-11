@@ -87,7 +87,7 @@ minetest.register_tool("nether:sword_nether", {
 		full_punch_interval = 0.7,
 		max_drop_level=1,
 		groupcaps={
-			snappy={times={[1]=1.5, [2]=0.6, [3]=0.2}, uses=85, maxlevel=5},
+			snappy={times={[1]=1.5, [2]=0.6, [3]=0.2}, uses=45, maxlevel=3},
 		},
 		damage_groups = {fleshy=10},
 	},

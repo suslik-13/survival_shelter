@@ -21,6 +21,11 @@
 
 local S = nether.get_translator
 
+-- Light level of Netherrack and Nethersand, so that the Nether is not pitch-dark
+-- (0 = original behaviour without light)
+local ROCK_LIGHT = math.max(0, math.min(minetest.LIGHT_MAX,
+	math.floor(tonumber(minetest.settings:get("nether_rock_light")) or 7)))
+
 -- Portal/wormhole nodes
 
 nether.register_wormhole_node("nether:portal", {
@@ -175,6 +180,8 @@ minetest.register_node("nether:rack", {
 	description = S("Netherrack"),
 	tiles = {"nether_rack.png"},
 	is_ground_content = true,
+	light_source = ROCK_LIGHT,
+	paramtype = ROCK_LIGHT > 0 and "light" or nil, -- needed for the mapgen light calculation
 	-- setting workable_with_nether_tools reduces the wear on nether:pick_nether when mining this node
 	groups = {cracky = 3, level = 2, workable_with_nether_tools = 3},
 	sounds = default.node_sound_stone_defaults(),
@@ -243,6 +250,8 @@ minetest.register_node("nether:rack_deep", {
 	_doc_items_longdesc = S("Netherrack from deep in the mantle"),
 	tiles = {"nether_rack_deep.png"},
 	is_ground_content = true,
+	light_source = ROCK_LIGHT,
+	paramtype = ROCK_LIGHT > 0 and "light" or nil, -- needed for the mapgen light calculation
 	-- setting workable_with_nether_tools reduces the wear on nether:pick_nether when mining this node
 	groups = {cracky = 3, level = 2, workable_with_nether_tools = 3},
 	sounds = default.node_sound_stone_defaults(),
@@ -252,6 +261,8 @@ minetest.register_node("nether:sand", {
 	description = S("Nethersand"),
 	tiles = {"nether_sand.png"},
 	is_ground_content = true,
+	light_source = ROCK_LIGHT,
+	paramtype = ROCK_LIGHT > 0 and "light" or nil, -- needed for the mapgen light calculation
 	groups = {crumbly = 3, level = 2, falling_node = 1},
 	sounds = default.node_sound_gravel_defaults({
 		footstep = {name = "default_gravel_footstep", gain = 0.45},
@@ -383,7 +394,7 @@ stairs.register_stair(
 	"nether:rack",
 	{cracky = 2, level = 2},
 	{"nether_rack.png"},
-	S("Netherrack stair"),
+	S("Netherrack Stair"),
 	minetest.registered_nodes["nether:rack"].sounds
 )
 stairs.register_slab( -- register a slab without adding inner and outer stairs
@@ -391,7 +402,7 @@ stairs.register_slab( -- register a slab without adding inner and outer stairs
 	"nether:rack",
 	{cracky = 2, level = 2},
 	{"nether_rack.png"},
-	S("Deep Netherrack slab"),
+	S("Netherrack Slab"),
 	minetest.registered_nodes["nether:rack"].sounds
 )
 
@@ -400,7 +411,7 @@ stairs.register_stair(
 	"nether:rack_deep",
 	{cracky = 2, level = 2},
 	{"nether_rack_deep.png"},
-	S("Deep Netherrack stair"),
+	S("Deep Netherrack Stair"),
 	minetest.registered_nodes["nether:rack_deep"].sounds
 )
 stairs.register_slab( -- register a slab without adding inner and outer stairs
@@ -408,14 +419,14 @@ stairs.register_slab( -- register a slab without adding inner and outer stairs
 	"nether:rack_deep",
 	{cracky = 2, level = 2},
 	{"nether_rack_deep.png"},
-	S("Deep Netherrack slab"),
+	S("Deep Netherrack Slab"),
 	minetest.registered_nodes["nether:rack_deep"].sounds
 )
 
 -- Connecting walls
 if minetest.get_modpath("walls") and minetest.global_exists("walls") and walls.register ~= nil then
-	walls.register("nether:rack_wall",      S("A Netherrack wall"),      "nether_rack.png",      "nether:rack",      minetest.registered_nodes["nether:rack"].sounds)
-	walls.register("nether:rack_deep_wall", S("A Deep Netherrack wall"), "nether_rack_deep.png", "nether:rack_deep", minetest.registered_nodes["nether:rack_deep"].sounds)
+	walls.register("nether:rack_wall",      S("A Netherrack Wall"),      "nether_rack.png",      "nether:rack",      minetest.registered_nodes["nether:rack"].sounds)
+	walls.register("nether:rack_deep_wall", S("A Deep Netherrack Wall"), "nether_rack_deep.png", "nether:rack_deep", minetest.registered_nodes["nether:rack_deep"].sounds)
 end
 
 -- StairsPlus
@@ -668,11 +679,11 @@ local function smash_lava_crust(pos, playsound)
 		maxexptime = 1,
 		minsize = .2,
 		maxsize = .8,
-		texture = "nether_particle.png^[colorize:#A00:255",
+		texture = "[fill:1x1:#A00",
 		glow = 8
 	}
 	minetest.add_particlespawner(lava_particlespawn_def)
-	lava_particlespawn_def.texture = "nether_particle.png^[colorize:#FB0:255"
+	lava_particlespawn_def.texture = "[fill:1x1:#FB0"
 	lava_particlespawn_def.maxvel.y = 3
 	lava_particlespawn_def.glow = 12
 	minetest.add_particlespawner(lava_particlespawn_def)
@@ -874,11 +885,11 @@ local function fumarole_onTimer(pos, elapsed)
 				maxexptime = 1.4,
 				minsize = .2,
 				maxsize = .8,
-				texture = "nether_particle.png^[colorize:#A00:255",
+				texture = "[fill:1x1:#A00",
 				glow = 8
 			}
 			minetest.add_particlespawner(embers_particlespawn_def)
-			embers_particlespawn_def.texture = "nether_particle.png^[colorize:#A50:255"
+			embers_particlespawn_def.texture = "[fill:1x1:#A50"
 			embers_particlespawn_def.maxvel.y = 3
 			embers_particlespawn_def.glow = 12
 			minetest.add_particlespawner(embers_particlespawn_def)
@@ -1010,3 +1021,21 @@ local airlike_darkness = {}
 for k,v in pairs(minetest.registered_nodes["air"]) do airlike_darkness[k] = v end
 airlike_darkness.paramtype = "none"
 minetest.register_node("nether:airlike_darkness", airlike_darkness)
+
+
+-- The light of already generated map blocks is stored in the map and has to be
+-- recalculated once (again after each change of 'nether_rock_light').
+minetest.log("action", "[nether] Nether rock light level: " .. ROCK_LIGHT)
+if ROCK_LIGHT > 0 then
+	minetest.register_lbm({
+		label = "Nether: recalculate light of the glowing Nether rock",
+		name = "nether:fix_rock_light_v2_" .. ROCK_LIGHT,
+		nodenames = {"nether:rack", "nether:rack_deep", "nether:sand"},
+		run_at_every_load = false,
+		bulk_action = function(pos_list)
+			-- all positions are within one map block
+			local minp = vector.multiply(vector.floor(vector.divide(pos_list[1], 16)), 16)
+			minetest.fix_light(minp, vector.add(minp, 15))
+		end,
+	})
+end
