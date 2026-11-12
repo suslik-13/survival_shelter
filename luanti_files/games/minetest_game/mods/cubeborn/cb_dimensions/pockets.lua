@@ -100,7 +100,7 @@ function cb_core.natural_scope(minp, maxp)
 			return "pocket"
 		end
 	end
-	return "world"
+	return cb_core.world_scope(minp, maxp)
 end
 
 function cb_dimensions.is_shell(pos)

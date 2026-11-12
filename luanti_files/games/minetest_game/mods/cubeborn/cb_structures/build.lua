@@ -14,7 +14,7 @@ local pending = {}
 local function layout_of(st)
 	local l = layouts[st.id]
 	if not l then
-		l = cb_structures.get_type(st.name).layout(vector.copy(st.origin), st.seed, st.plan)
+		l = cb_structures.get_type(st.name).layout(vector.copy(st.origin), st.seed, st.plan, st.here)
 		layouts[st.id] = l
 	end
 	return l
@@ -270,17 +270,21 @@ local function emerge(minp, maxp, cb)
 	end)
 end
 
-local function queue(name, origin, owner, seed, l, plan, callback)
+local function queue(name, origin, owner, seed, l, plan, callback, here)
 	local id = cb_structures.registry.add({ type = name, minp = l.minp, maxp = l.maxp, seed = seed,
 		owner = owner, state = "building", target = l.target, })
 	cb_core.jobs.start("cb_structures:build", { id = id, name = name, origin = vector.copy(origin), seed = seed,
-		plan = plan, phase = "emerge", i = 0, parts = {}, palette = {}, }, { owner = owner, })
+		plan = plan, here = here, phase = "emerge", i = 0, parts = {}, palette = {}, }, { owner = owner, })
 	callback({ ok = true, id = id, })
 end
 
 -- Places structure `name` with its layout origin at `origin`. callback(res)
 -- gets {ok = true, id = id} once the build is queued, or {ok = false, msg}.
--- opts.variant picks a variant of types that have them. Types with a plan()
+-- opts.variant picks a variant of types that have them; opts.here (an admin's
+-- /cb_spawn): types that pick their own height in a pocket (Nether fortress,
+-- bastion) stand at origin.y instead, and the build goes ahead whatever is
+-- there (builds, protection, other structures, the type's usual worlds and
+-- heights) because the admin asks for it. Types with a plan()
 -- first emerge their `prepare` area, then plan (reading the map); the plan
 -- is kept in the build job so that the layout never reads the map again.
 function cb_structures.place(name, origin, owner, callback, seed, opts)
@@ -298,19 +302,20 @@ function cb_structures.place(name, origin, owner, callback, seed, opts)
 		end
 	end
 	local function go(plan)
-		local l = def.layout(vector.copy(origin), seed, plan)
+		local l = def.layout(vector.copy(origin), seed, plan, opts.here)
 		-- an underground type that pokes a little above its ceiling goes down
 		-- by as much (a mineshaft corridor climbing from an origin at the
 		-- ceiling); one on the surface is still refused
 		for _ = 1, 3 do
-			if plan or not def.y_max or l.maxp.y <= def.y_max or l.maxp.y - def.y_max > cb_structures.SINK_MAX then
+			if plan or opts.here or not def.y_max or l.maxp.y <= def.y_max or l.maxp.y - def.y_max > cb_structures.SINK_MAX then
 				break
 			end
 			origin = vector.offset(origin, 0, def.y_max - l.maxp.y, 0)
-			l = def.layout(vector.copy(origin), seed, plan)
+			l = def.layout(vector.copy(origin), seed, plan, opts.here)
 		end
-		local ok, err = cb_structures.validate(name, l.minp, l.maxp)
-		if ok then
+		local forced = opts.here
+		local ok, err = cb_structures.validate(name, l.minp, l.maxp, forced)
+		if ok and not forced then
 			for box in pairs(pending) do
 				if cb_core.intersect(l.minp, l.maxp, box.minp, box.maxp) then
 					ok, err = false, S("Another structure is being placed there.")
@@ -320,8 +325,8 @@ function cb_structures.place(name, origin, owner, callback, seed, opts)
 		if not ok then
 			return callback({ ok = false, msg = err, })
 		end
-		if def.self_checked then
-			return queue(name, origin, owner, seed, l, plan, callback)
+		if def.self_checked or forced then
+			return queue(name, origin, owner, seed, l, plan, callback, opts.here)
 		end
 		local box = { minp = l.minp, maxp = l.maxp, }
 		pending[box] = true
@@ -336,7 +341,7 @@ function cb_structures.place(name, origin, owner, callback, seed, opts)
 			if not valid then
 				return callback({ ok = false, msg = why, })
 			end
-			queue(name, origin, owner, seed, l, plan, callback)
+			queue(name, origin, owner, seed, l, plan, callback, opts.here)
 		end)
 	end
 	if not def.plan then
@@ -345,7 +350,7 @@ function cb_structures.place(name, origin, owner, callback, seed, opts)
 	local pr = def.prepare
 	emerge(vector.offset(origin, -pr.radius, -pr.below, -pr.radius), vector.offset(origin, pr.radius, pr.above, pr.radius),
 		function()
-			local plan, err = def.plan(vector.copy(origin), seed, variant)
+			local plan, err = def.plan(vector.copy(origin), seed, variant, opts.here)
 			if not plan then
 				return callback({ ok = false, msg = err, })
 			end

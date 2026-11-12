@@ -300,9 +300,12 @@ an anvil.
 ## Structures (`cb_structures`)
 
 Admins with `cb_admin` build structures with `/cb_spawn <structure> [x y z]` (without coordinates: at
-the admin's position) and see the list with `/cb_spawn list`. The place is checked first (protection,
-player blocks, other structures, the right dimension and height); the build then runs as a background
-job and the admin is told when it is done. Chests get their loot when first opened.
+the admin's position) and see the list with `/cb_spawn list`. The admin's word goes: the structure is
+built right there, over protection, player blocks and other structures, in any dimension and at any
+height (only the map limits and pocket walls hold; types that need the terrain, like a village on flat
+ground or an ocean ruin in deep water, still read it). Fortresses and bastions stand at the given
+height. The build runs as a background job and the admin is told when it is done; while the server
+lags it still takes a step a second. Chests get their loot when first opened.
 
 Structures with inhabitants refill them while a player is within 48 nodes: one mob per part per
 minute up to a number set by the part's size, and only while the part is intact (at least 75 % of its
@@ -720,7 +723,7 @@ light, open sky, the node it stands on or swims in, biome words, heights, weight
 ABMs (ground and water, every 30 s, rare per node) pick a mob among the rules that fit the spot.
 Monsters need full darkness, as in Minecraft. Within 32 nodes of the spot at most
 `cubeborn.spawn_cap_monster` (8), `_animal` (6), `_water` (5), `_ambient` (3) Cubeborn mobs of that
-category may live; `cubeborn.spawn_chance_scale` (1) makes the ABMs rarer. The mobs_redo settings
+category may live, in the Nether `cubeborn.spawn_cap_nether_monster` (16) monsters; `cubeborn.spawn_chance_scale` (1) makes the ABMs rarer. The mobs_redo settings
 apply: `mobs_spawn = false` stops it, nothing spawns within `mob_nospawn_range` of a player, monsters
 never in peaceful mode or (with `mobs_spawn_protected = false`) in protected areas. A mob is placed
 only where its whole box fits (camels need three nodes across).
@@ -949,7 +952,7 @@ snow. Nobody lives there: the warden comes only from the shriekers.
 **Trial chambers** (`/cb_spawn trial_chambers`, or `/cb_scatter trial_chambers N`, at least 40 under the
 ground) are Mineclonia's corridors, chambers and atriums of tuff and copper, assembled underground: the
 first corridor at the given height when that is -30 or lower, else at -40, nothing above -20. Nobody lives
-there; mobs come from **trial spawners**. A trial spawner wakes when a player (not in creative) comes
+there; mobs come from **trial spawners**. A trial spawner wakes when a player (in creative too) comes
 within 14: it calls 6 mobs plus 2 for every further player, at most 2 plus 1 per further player at a time
 (zombies, husks, spiders, slimes, silverfish, baby zombies, cave spiders, strays, skeletons, bogged or
 breezes - each spawner its own kind). When the last one is gone every player of the trial gets a **trial

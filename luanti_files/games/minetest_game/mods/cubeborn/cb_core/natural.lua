@@ -11,6 +11,12 @@ local MAPGEN_NODES = {
 	"nether:sand", "nether:fumarole", "nether:fumarole_slab", "nether:fumarole_corner",
 }
 
+-- left by the nether mod's dungeons (fences, slabs and dungeon_loot chests
+-- in its brick corridors): natural only inside the nether mod's range
+local NETHER_DUNGEON_NODES = {
+	"nether:fence_nether_brick", "stairs:slab_nether_brick", "stairs:stair_nether_brick", "default:chest",
+}
+
 local BIOME_FIELDS = {
 	"node_top", "node_filler", "node_stone", "node_water_top", "node_water",
 	"node_river_water", "node_riverbed", "node_cave_liquid", "node_dungeon",
@@ -24,11 +30,18 @@ function cb_core.register_natural(name, scope)
 	cb_core._natural = nil
 end
 
--- Which natural set applies to a box. cb_dimensions replaces this so that
--- boxes touching a pocket use the "pocket" set.
-function cb_core.natural_scope()
+-- Which natural set applies to a box: "nether" for one reaching into the
+-- nether mod's range. cb_dimensions replaces this so that boxes touching a
+-- pocket use the "pocket" set (and calls cb_core.world_scope otherwise).
+function cb_core.world_scope(minp, maxp)
+	local nether = rawget(_G, "nether")
+	if minp and cb_core.profile.nether == "external" and nether and nether.DEPTH_FLOOR
+			and maxp.y >= nether.DEPTH_FLOOR and minp.y <= nether.DEPTH_CEILING then
+		return "nether"
+	end
 	return "world"
 end
+cb_core.natural_scope = cb_core.world_scope
 
 local function add(set, name)
 	if type(name) == "table" then
@@ -112,7 +125,8 @@ local function build_world()
 	return set
 end
 
--- Set of natural content ids for `scope` ("world" by default, or "pocket").
+-- Set of natural content ids for `scope` ("world" by default, "pocket" or
+-- "nether").
 function cb_core.natural_cids(scope)
 	if not cb_core._natural then
 		local world = build_world()
@@ -120,7 +134,9 @@ function cb_core.natural_cids(scope)
 		for name in pairs(extra.pocket) do
 			add(pocket, name)
 		end
-		cb_core._natural = { world = world, pocket = pocket, }
+		local nether = table.copy(world)
+		add(nether, NETHER_DUNGEON_NODES)
+		cb_core._natural = { world = world, pocket = pocket, nether = nether, }
 	end
-	return cb_core._natural[scope == "pocket" and "pocket" or "world"]
+	return cb_core._natural[scope] or cb_core._natural.world
 end

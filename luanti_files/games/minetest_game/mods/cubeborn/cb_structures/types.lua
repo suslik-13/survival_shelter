@@ -65,7 +65,9 @@ function cb_structures.suspicious(ctx, pos, kind, name, seed)
 	end
 end
 
-function cb_structures.validate(name, minp, maxp)
+-- forced (an admin's /cb_spawn): only the map limits and the dimension
+-- boundaries hold; the type's worlds, heights and other structures do not.
+function cb_structures.validate(name, minp, maxp, forced)
 	local def = types[name]
 	if not def then
 		return false, S("Unknown structure '@1'.", name)
@@ -90,6 +92,9 @@ function cb_structures.validate(name, minp, maxp)
 		if p.state ~= "ready" and cb_core.intersect(minp, maxp, p.minp, p.maxp) then
 			return false, S("The pocket '@1' is still being created.", p.dim)
 		end
+	end
+	if forced then
+		return true
 	end
 	if table.indexof(def.dims, dim) < 0 then
 		return false, S("'@1' cannot be built in @2.", name, dim)

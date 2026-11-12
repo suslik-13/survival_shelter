@@ -136,7 +136,7 @@ local function ground(x, y, z)
 	end
 end
 
-function RP.plan(origin, seed, variant)
+function RP.plan(origin, seed, variant, here)
 	local rng = PcgRandom(seed)
 	local setups = RP.SETUPS[variant]
 	local cfg = setups[1]
@@ -164,7 +164,11 @@ function RP.plan(origin, seed, variant)
 	local floor = cfg.placement == "on_ocean_floor"
 	local g = ground(origin.x, floor and math.max(origin.y, 1) or origin.y, origin.z)
 	if not g then
-		return nil, S("No ground here for a ruined portal.")
+		if not here then
+			return nil, S("No ground here for a ruined portal.")
+		end
+		-- an admin's /cb_spawn: it stands where asked, on air if need be
+		g = origin.y - 1
 	end
 	local height = g + 1
 	local base

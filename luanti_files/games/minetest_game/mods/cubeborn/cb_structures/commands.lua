@@ -48,6 +48,8 @@ core.register_chatcommand("cb_spawn", {
 			local p = player:get_pos()
 			origin = vector.new(math.floor(p.x + 0.5), math.floor(p.y + 0.5), math.floor(p.z + 0.5))
 		end
+		-- sent first: the answer may come before this function returns
+		core.chat_send_player(name, S("Placing '@1'...", what))
 		cb_structures.place(what, origin, name, function(res)
 			if res.ok then
 				core.chat_send_player(name, S("Building '@1' as structure #@2.", what, res.id))
@@ -66,8 +68,8 @@ core.register_chatcommand("cb_spawn", {
 			else
 				core.chat_send_player(name, res.msg)
 			end
-		end, nil, { variant = variant, })
-		return true, S("Checking the place for '@1'...", what)
+		end, nil, { variant = variant, here = true, })
+		return true
 	end,
 })
 

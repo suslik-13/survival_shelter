@@ -177,9 +177,33 @@ local function run_slice()
 	end
 end
 
+-- While the server lags (or the queue is paused) the jobs wait, but those a
+-- player started (an admin's /cb_spawn) still take one step a second: on a
+-- busy server the lag may never end.
+local SLOW_STEP_US = 1000000
+local last_slow = 0
+
+local function slow_step()
+	local now = core.get_us_time()
+	if now - last_slow < SLOW_STEP_US then
+		return
+	end
+	last_slow = now
+	for _, job in ipairs(queue) do
+		if job.owner and not job.gone then
+			run_step(job)
+			return
+		end
+	end
+end
+
 core.register_globalstep(function(dtime)
-	if queue[1] and dtime <= LAG_DTIME and budget_us > 0 then
-		run_slice()
+	if queue[1] then
+		if dtime <= LAG_DTIME and budget_us > 0 then
+			run_slice()
+		else
+			slow_step()
+		end
 	end
 	if dirty and core.get_us_time() - last_save > 1000000 then
 		save_now()
