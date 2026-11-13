@@ -159,7 +159,7 @@ ui.register_button("leaderboard", {
 -- Factions button (swapped with set day position)
 ui.register_button("factions", {
 	type = "image", 
-	image = "default_book.png",
+	image = "serverfactions_menu_icon.png",
 	tooltip = "Factions Menu",
 	action = function(player)
 		local player_name = player:get_player_name()

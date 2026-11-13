@@ -69,7 +69,11 @@ function relations.set_relation(player_name, fac1, fac2, choix)
     relations.load_relations()
 
     local faction_name = factions.get_player_faction(player_name)
-    local faction = factions.list[faction_name]
+    local faction = faction_name and factions.list[faction_name]
+
+    if not faction or faction_name ~= fac1 or not factions.list[fac2] then
+        return false, core.chat_send_player(player_name, "Invalid faction.")
+    end
 
     if not faction.members[player_name] or faction.members[player_name] ~= "factionleader" then
         return false, core.chat_send_player(player_name, "You must be chief or co-leader of your faction to defined a relation.")

@@ -55,7 +55,9 @@ function factions.claims.load_claims()
     if file then
         for line in file:lines() do
             local x, z, faction_name = line:match("([^,]+),([^,]+),([^,]+)")
-            factions.claims.data[x .. "," .. z] = faction_name
+            if x and z and faction_name then
+                factions.claims.data[x .. "," .. z] = faction_name
+            end
         end
         file:close()
     end
@@ -115,6 +117,7 @@ function factions.claim(player_name)
     local faction = factions.list[faction_name]
     if
         faction.members[player_name] ~= "factionleader" and faction.members[player_name] ~= "advisor" and
+            faction.members[player_name] ~= "conseiller" and
             faction.members[player_name] ~= "co-leader"
      then
         return false, "Only the advisor, co-leader or faction leader has the right to protect an area."
@@ -154,6 +157,7 @@ function factions.claim(player_name)
 
     factions.create_boundaries(x1, z1, pos.y, player_name) 
     faction.claim_count = faction.claim_count + 1
+    factions.save_factions()
     return true, core.chat_send_player(player_name, "Claimed territory.")
 end
 
@@ -311,7 +315,8 @@ function factions.release_claim(player_name)
 
     factions.claims.data[x1 .. "," .. z1] = nil
     factions.claims.save_all_claims()
-    faction.claim_count = faction.claim_count - 1
+    faction.claim_count = math.max(0, faction.claim_count - 1)
+    factions.save_factions()
     core.chat_send_player(player_name, "You have liberated the territory: (" .. x1 .. ", " .. z1 .. ").")
     factions.show_claims(player_name)
     return true, "Territory liberated."

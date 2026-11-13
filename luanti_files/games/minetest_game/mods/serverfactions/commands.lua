@@ -74,46 +74,46 @@ core.register_chatcommand(
 
             elseif subcommand == "accept" then
                 local target_player = args[2]
-                local faction_name = factions.get_player_faction(name)
-                
-                if not faction_name then
+                if not factions.get_player_faction(name) then
                     return false, "Your not in a faction."
                 end
-            
-                local faction = factions.list[faction_name]
-                if faction.leader ~= name then
-                    return false, "Only the faction leader can accept members into the faction."
-                end
-                local success, message = factions.accept_invite(name, target_player)
-
-                if success then
-                    core.chat_send_player(name, message)
-                else
-                    core.chat_send_player(name, message or "Error while inviting.")
-                end
-                return success
+                -- permission (leader or co-leader) is checked in factions.accept_invite
+                return factions.accept_invite(name, target_player)
 
             elseif subcommand == "refuse" then
-                local args = args[2]
-                local faction_name = factions.get_player_faction(name)
-                if not faction_name then
+                -- Bug fix: the old code passed the faction name where the player name was
+                -- expected and looked for a "waiting" member, while join requests are
+                -- stored separately - so requests were never removed.
+                local target_player = args[2]
+                if not factions.get_player_faction(name) then
                     return false, "Your not in a faction."
                 end
+                return factions.refuse_invite(name, target_player)
 
-                local faction = factions.list[faction_name]
-                if faction.leader ~= name then
-                    return false, "Only the faction leader can refuse members within the faction."
+            elseif subcommand == "decline" then
+                return factions.decline_invite(name, args[2])
+
+            elseif subcommand == "cancel" then
+                if not args[2] then
+                    return false, "Usage: /f cancel <faction>"
                 end
+                return factions.cancel_join_request(name, args[2])
 
-                local success, message = factions.refuse_invite(args, faction_name)
-
-                if message then
-                    core.chat_send_player(name, message)
-                else
-                    core.chat_send_player(name, "Error declining invitation.")
+            elseif subcommand == "requests" then
+                local faction_name = factions.get_player_faction(name)
+                if not faction_name or not factions.can_manage(name, faction_name) then
+                    return false, "Only the faction leader or a co-leader can see join requests."
                 end
-                return success
-
+                factions.clean_expired_invitations()
+                local list = {}
+                for requester in pairs(factions.pending.join_requests[faction_name] or {}) do
+                    table.insert(list, requester)
+                end
+                if #list == 0 then
+                    return true, "No pending join requests."
+                end
+                table.sort(list)
+                return true, "Pending join requests: " .. table.concat(list, ", ")
 
             elseif subcommand == "help" then
                 local help_text =
@@ -125,8 +125,11 @@ Available commands:
 /f claims - Show claimed territories
 /f list - List factions on the server
 /f clear_boundaries - ADMIN - Remove all claim boundaries
-/f refuse - Refuse a player's request to join your faction
-/f accept - Accept a player's request to join your faction
+/f accept <player> - Accept a player's request to join your faction
+/f refuse <player> - Refuse a join request (or cancel an invitation you sent)
+/f requests - List pending join requests
+/f decline <faction> - Decline an invitation you received
+/f cancel <faction> - Cancel your own join request
 /fc <message> - Allows you to send a message to your entire faction.
 /f sethome - Allows the faction leader to set the faction home.
 ]]

@@ -8,29 +8,133 @@ function factions.load_factions()
     local file = io.open(core.get_worldpath() .. "/factions.txt", "r")
     if file then
         for line in file:lines() do
-            local faction_name, leader, members_str, claims, maxclaims = line:match("([^,]+),([^,]+),(.+),([^,]+),([^,]+)")
-            factions.list[faction_name] = {
-                name = faction_name,
-                leader = leader,
-                members = {},
-                tax = 0,
-                claim_count = tonumber(claims), 
-                max_claim = tonumber(maxclaims)
-            }
-            for member_info in members_str:gmatch("([^;]+)") do
-                local member_name, role = member_info:match("([^:]+):([^:]+)")
-                if member_name and role then
-                    factions.list[faction_name].members[member_name] = role
+            local faction_name, leader, members_str, claims, maxclaims = line:match("^([^,]+),([^,]+),(.*),([^,]+),([^,]+)$")
+            if faction_name then
+                local faction = {
+                    name = faction_name,
+                    leader = leader,
+                    members = {},
+                    tax = 0,
+                    claim_count = tonumber(claims) or 0,
+                    max_claim = tonumber(maxclaims) or 4
+                }
+                factions.list[faction_name] = faction
+                for member_info in members_str:gmatch("([^;]+)") do
+                    local member_name, role = member_info:match("([^:]+):([^:]+)")
+                    if member_name and role then
+                        if role == "waiting" then
+                            -- Legacy format: pending invitations were stored as members
+                            factions.pending.invitations[faction_name] = factions.pending.invitations[faction_name] or {}
+                            factions.pending.invitations[faction_name][member_name] = os.time()
+                        else
+                            faction.members[member_name] = role
+                        end
+                    end
                 end
+                if not faction.members[leader] then
+                    faction.members[leader] = "factionleader"
+                end
+            elseif line ~= "" then
+                core.log("warning", "[serverfactions] Cannot parse factions.txt line: " .. line)
             end
         end
         file:close()
+        factions.save_pending()
     end
+end
+
+-- Pending invitations (leader -> player) and join requests (player -> faction).
+-- Stored in mod storage so they survive restarts and can be cleaned up properly.
+-- Format: pending.invitations[faction_name][player_name] = sent_at
+--         pending.join_requests[faction_name][player_name] = sent_at
+local storage = core.get_mod_storage()
+local PENDING_TTL = 604800 -- one week
+
+factions.pending = core.deserialize(storage:get_string("pending") or "") or {}
+factions.pending.invitations = factions.pending.invitations or {}
+factions.pending.join_requests = factions.pending.join_requests or {}
+
+function factions.save_pending()
+    storage:set_string("pending", core.serialize(factions.pending))
+end
+
+local function pending_get(kind, faction_name, player_name)
+    local t = factions.pending[kind][faction_name]
+    return t and t[player_name]
+end
+
+local function pending_set(kind, faction_name, player_name, value)
+    local t = factions.pending[kind][faction_name]
+    if value == nil then
+        if t then
+            t[player_name] = nil
+            if next(t) == nil then
+                factions.pending[kind][faction_name] = nil
+            end
+        end
+    else
+        if not t then
+            t = {}
+            factions.pending[kind][faction_name] = t
+        end
+        t[player_name] = value
+    end
+    factions.save_pending()
+end
+
+-- Remove every invitation/request concerning a player (used when he joins a faction)
+local function pending_clear_player(player_name)
+    for _, kind in ipairs({"invitations", "join_requests"}) do
+        for faction_name, t in pairs(factions.pending[kind]) do
+            t[player_name] = nil
+            if next(t) == nil then
+                factions.pending[kind][faction_name] = nil
+            end
+        end
+    end
+    factions.save_pending()
+end
+
+local function pending_clear_faction(faction_name)
+    factions.pending.invitations[faction_name] = nil
+    factions.pending.join_requests[faction_name] = nil
+    factions.save_pending()
+end
+
+-- Can this player manage invitations/requests of the faction?
+function factions.can_manage(player_name, faction_name)
+    local faction = factions.list[faction_name]
+    if not faction then
+        return false
+    end
+    return faction.leader == player_name or faction.members[player_name] == "co-leader"
+end
+
+-- Notify online leader and co-leaders of a faction
+local function notify_managers(faction_name, message)
+    local faction = factions.list[faction_name]
+    if not faction then
+        return
+    end
+    for member_name, role in pairs(faction.members) do
+        if (member_name == faction.leader or role == "co-leader") and core.get_player_by_name(member_name) then
+            core.chat_send_player(member_name, message)
+        end
+    end
+end
+
+-- Faction names are stored in comma/colon separated files and used in formspecs
+function factions.is_valid_name(str)
+    return str:match("^[%w_%-]+$") ~= nil
 end
 
 -- Function for save factions in a file
 function factions.save_factions()
     local file = io.open(core.get_worldpath() .. "/factions.txt", "w")
+    if not file then
+        core.log("error", "[serverfactions] Cannot open factions.txt for writing.")
+        return
+    end
     for faction_name, faction in pairs(factions.list) do
         local members_str = ""
         for member_name, role in pairs(faction.members) do
@@ -72,14 +176,72 @@ function factions.load_homes()
 end
 
 -- Save the factions when quitting
+-- (previously this only saved when at least one faction home existed)
 core.register_on_shutdown(function()
-    if factions.homes then
-        for faction_name, pos in pairs(factions.homes) do
-            factions.save_homes()
-            factions.save_factions()
-            factions.load_factions()
+    factions.save_homes()
+    factions.save_factions()
+    factions.save_pending()
+end)
+
+-- Expire old invitations/requests
+function factions.clean_expired_invitations()
+    local now = os.time()
+    local changed = false
+    for _, kind in ipairs({"invitations", "join_requests"}) do
+        for faction_name, t in pairs(factions.pending[kind]) do
+            for player_name, sent_at in pairs(t) do
+                if not factions.list[faction_name] or now - sent_at > PENDING_TTL then
+                    t[player_name] = nil
+                    changed = true
+                end
+            end
+            if next(t) == nil then
+                factions.pending[kind][faction_name] = nil
+                changed = true
+            end
         end
     end
+    if changed then
+        factions.save_pending()
+    end
+end
+
+-- One single join handler: remind pending invitations/requests once per login
+core.register_on_joinplayer(function(player)
+    local name = player:get_player_name()
+    core.after(2, function()
+        if not core.get_player_by_name(name) then
+            return
+        end
+        factions.clean_expired_invitations()
+
+        if not factions.get_player_faction(name) then
+            local invited_by = {}
+            for faction_name, t in pairs(factions.pending.invitations) do
+                if t[name] then
+                    table.insert(invited_by, faction_name)
+                end
+            end
+            if #invited_by > 0 then
+                table.sort(invited_by)
+                core.chat_send_player(name, "You have faction invitations from: " .. table.concat(invited_by, ", ") ..
+                    ". Open /f menu to join, or /f decline <faction> to decline.")
+            end
+        end
+
+        local faction_name = factions.get_player_faction(name)
+        if faction_name and factions.can_manage(name, faction_name) then
+            local requests = {}
+            for requester in pairs(factions.pending.join_requests[faction_name] or {}) do
+                table.insert(requests, requester)
+            end
+            if #requests > 0 then
+                table.sort(requests)
+                core.chat_send_player(name, "Pending join requests: " .. table.concat(requests, ", ") ..
+                    ". Use /f accept <player> or /f refuse <player>.")
+            end
+        end
+    end)
 end)
 
 -- Add the name of the faction in front of the message
@@ -103,10 +265,6 @@ do
             prefix = faction_name
         else
             prefix = "No Clan"
-        end
-        local faction = factions.list[faction_name]
-        if faction_name and faction and faction.members[name] == "waiting" then
-            prefix = "Waiting"
         end
 
         local formatted = nil
@@ -141,6 +299,10 @@ function factions.create(player_name, faction_name)
         return false, "Your already in a faction."
     end
 
+    if not factions.is_valid_name(faction_name) then
+        return false, "The faction name may only contain letters, digits, '_' and '-'."
+    end
+
     factions.list[faction_name] = {
         name = faction_name,
         leader = player_name,
@@ -163,156 +325,161 @@ function factions.create(player_name, faction_name)
         end
     end
 
-    relations.save_relations(false)
+    -- full rewrite: appending duplicated every relation line on each creation
+    relations.save_relations(true)
+    pending_clear_player(player_name)
+    factions.save_factions()
 
     return true, "Faction '" .. faction_name .. "' successfully created."
 end
 
--- Functino for invite someone in your faction
+-- Function for invite someone in your faction
 function factions.invite(player_name, faction_name, target_player)
     if not factions.list[faction_name] then
         return false, "Cannot find the faction."
     end
 
-    local faction = factions.list[faction_name]
+    if not factions.can_manage(player_name, faction_name) then
+        return false, "Only the faction leader or a co-leader can invite players."
+    end
 
-    if faction.leader ~= player_name then
-        return false, "Your not the chief of this faction."
+    if not core.player_exists(target_player) then
+        return false, "The player " .. target_player .. " does not exist."
     end
 
     if factions.get_player_faction(target_player) then
         return false, "The player " .. target_player .. " is already in a faction."
     end
 
-    if faction.members[target_player] == "waiting" then
+    if pending_get("invitations", faction_name, target_player) then
         return false, target_player .. " already has a pending invitation."
     end
 
-    faction.members[target_player] = "waiting"
-    faction.invitations = faction.invitations or {}
-    faction.invitations[target_player] = { sent_at = os.time() }
-
-    local target_player_obj = core.get_player_by_name(target_player)
-    if target_player_obj then
-        core.chat_send_player(
-            target_player,
-            "You have been invited to join the faction '" .. faction_name .. "'."
-        )
-    else
-
-        core.register_on_joinplayer(
-            function(player)
-                if player:get_player_name() == target_player then
-                    core.chat_send_player(
-                        target_player,
-                        "You have been invited to join the faction '" .. faction_name .. "'."
-                    )
-                end
-            end
-        )
+    -- The player asked to join earlier: inviting him simply accepts the request
+    if pending_get("join_requests", faction_name, target_player) then
+        return factions.accept_invite(player_name, target_player)
     end
 
-    return true, "Invitation sended to " .. target_player
-end
+    pending_set("invitations", faction_name, target_player, os.time())
 
--- Clean the invitation after a week
-function factions.clean_expired_invitations()
-    local current_time = os.time()
-    local one_week_in_seconds = 604800
-
-    for faction_name, faction in pairs(factions.list) do
-        if faction.invitations then
-            for invited_player_name, invite_data in pairs(faction.invitations) do
-                if current_time - invite_data.sent_at > one_week_in_seconds then
-                    faction.invitations[invited_player_name] = nil
-                    core.chat_send_player(faction.leader, "The invitation for " .. invited_player_name .. " has expired and been deleted.")
-                end
-            end
-        end
+    if core.get_player_by_name(target_player) then
+        core.chat_send_player(target_player,
+            "You have been invited to join the faction '" .. faction_name ..
+            "'. Open /f menu to join, or /f decline " .. faction_name .. " to decline.")
     end
+    -- Offline players get a reminder on their next login (see register_on_joinplayer)
+
+    return true, "Invitation sent to " .. target_player
 end
 
--- Function for accept an invite
+-- Function for accept a join request (or force an invitation) - leader/co-leader side
 function factions.accept_invite(player_name, target_player)
     local faction_name = factions.get_player_faction(player_name)
-    if not factions.list[faction_name] then
+    if not faction_name or not factions.list[faction_name] then
         return false, "Cannot find the faction."
+    end
+    if not target_player or target_player == "" then
+        return false, "Usage: /f accept <player>"
     end
 
     local faction = factions.list[faction_name]
-    -- Only faction leader or co-leader can accept invitations/requests
-    if faction.leader ~= player_name and faction.members[player_name] ~= "co-leader" then
+    if not factions.can_manage(player_name, faction_name) then
         return false, "Only the faction leader or a co-leader can accept invitations."
     end
 
-    local current_time = os.time()
-    local one_week_in_seconds = 604800
+    factions.clean_expired_invitations()
 
-    -- If an explicit invitation exists (leader invited the player)
-    if faction.invitations and faction.invitations[target_player] then
-        local invite_data = faction.invitations[target_player]
-        if current_time - invite_data.sent_at > one_week_in_seconds then
-            faction.invitations[target_player] = nil
-            core.chat_send_player(player_name, "The invitation for " .. target_player .. " has expired.")
-            return false, "The invitation expired."
-        end
-        faction.invitations[target_player] = nil
-        faction.members[target_player] = "membre"
-        core.chat_send_player(target_player, "Your invitation to join faction '" .. faction_name .. "' has been accepted.")
-        return true, target_player .. " joined your faction."
+    if not pending_get("join_requests", faction_name, target_player)
+            and not pending_get("invitations", faction_name, target_player) then
+        return false, "No pending invitation or request found for " .. target_player .. "."
     end
 
-    -- If the player requested to join, accept the join request
-    if faction.join_requests and faction.join_requests[target_player] then
-        local req = faction.join_requests[target_player]
-        if current_time - req.sent_at > one_week_in_seconds then
-            faction.join_requests[target_player] = nil
-            core.chat_send_player(player_name, "The join request from " .. target_player .. " has expired.")
-            return false, "The join request expired."
-        end
-        faction.join_requests[target_player] = nil
-        faction.members[target_player] = "membre"
-        core.chat_send_player(target_player, "Your request to join faction '" .. faction_name .. "' has been accepted.")
-        return true, target_player .. " joined your faction."
+    if factions.get_player_faction(target_player) then
+        pending_set("join_requests", faction_name, target_player, nil)
+        pending_set("invitations", faction_name, target_player, nil)
+        return false, target_player .. " is already in a faction."
     end
 
-    return false, "No pending invitation or request found for " .. target_player .. "."
+    faction.members[target_player] = "membre"
+    pending_clear_player(target_player)
+    factions.save_factions()
+
+    core.chat_send_player(target_player, "Your request to join faction '" .. faction_name .. "' has been accepted.")
+    return true, target_player .. " joined your faction."
 end
 
--- Function for join a faction
+-- Function for join a faction (player side, needs an invitation)
 function factions.join(player_name, faction_name)
     if not factions.list[faction_name] then
         return false, "Cannot find the faction."
     end
 
-    local faction = factions.list[faction_name]
-    -- Player may join only if they have an explicit invitation (from leader)
-    if not (faction.invitations and faction.invitations[player_name]) then
+    factions.clean_expired_invitations()
+
+    if not pending_get("invitations", faction_name, player_name) then
         return false, "You do not have an active invitation to join this faction."
     end
 
-    if factions.get_player_faction(player_name) ~= nil and faction.members[player_name] ~= "waiting" then
-        return false, "Your already in a faction."
+    if factions.get_player_faction(player_name) then
+        return false, "You are already in a faction."
     end
 
-    faction.members[player_name] = "membre"
-    faction.invitations[player_name] = nil
+    factions.list[faction_name].members[player_name] = "membre"
+    pending_clear_player(player_name)
+    factions.save_factions()
+    notify_managers(faction_name, player_name .. " joined your faction.")
     return true, "You just joined the faction '" .. faction_name .. "'."
 end
 
--- Function for refuse a faction invite
-function factions.refuse_invite(player_name, faction_name)
-    if not factions.list[faction_name] then
-        return false, "Cannot find the faction."
+-- Function for refuse a join request / cancel an invitation (leader/co-leader side)
+function factions.refuse_invite(player_name, target_player)
+    local faction_name = factions.get_player_faction(player_name)
+    if not faction_name then
+        return false, "You are not in a faction."
+    end
+    if not factions.can_manage(player_name, faction_name) then
+        return false, "Only the faction leader or a co-leader can refuse requests."
+    end
+    if not target_player or target_player == "" then
+        return false, "Usage: /f refuse <player>"
     end
 
-    local faction = factions.list[faction_name]
-    if faction.members[player_name] ~= "waiting" then
-        return false, "You haven't got any invite to join this faction."
+    local had_request = pending_get("join_requests", faction_name, target_player)
+    local had_invite = pending_get("invitations", faction_name, target_player)
+    if not had_request and not had_invite then
+        return false, "No pending invitation or request found for " .. target_player .. "."
     end
 
-    faction.members[player_name] = nil 
+    pending_set("join_requests", faction_name, target_player, nil)
+    pending_set("invitations", faction_name, target_player, nil)
+
+    if had_request then
+        core.chat_send_player(target_player, "Your request to join faction '" .. faction_name .. "' has been refused.")
+        return true, "You refused the join request of " .. target_player .. "."
+    end
+    return true, "The invitation for " .. target_player .. " has been cancelled."
+end
+
+-- Function for decline an invitation (invited player side)
+function factions.decline_invite(player_name, faction_name)
+    if not faction_name or faction_name == "" then
+        return false, "Usage: /f decline <faction>"
+    end
+    if not pending_get("invitations", faction_name, player_name) then
+        return false, "You haven't got any invite to join the faction '" .. faction_name .. "'."
+    end
+    pending_set("invitations", faction_name, player_name, nil)
+    notify_managers(faction_name, player_name .. " declined the invitation to join your faction.")
     return true, "You refused the faction invite from the faction '" .. faction_name .. "'."
+end
+
+-- Function for cancel your own join request
+function factions.cancel_join_request(player_name, faction_name)
+    if not pending_get("join_requests", faction_name, player_name) then
+        return false, "You didn't ask to join this faction."
+    end
+    pending_set("join_requests", faction_name, player_name, nil)
+    return true, "You have cancelled your join request."
 end
 
 -- Function for kick someone in your faction
@@ -339,6 +506,8 @@ function factions.kick(player_name, faction_name, target_player)
     end
 
     faction.members[target_player] = nil
+    factions.save_factions()
+    core.chat_send_player(target_player, "You have been kicked from the faction '" .. faction_name .. "'.")
     return true, target_player .. " was kick from the faction."
 end
 
@@ -354,51 +523,34 @@ end
 -- Function for show the faction menu
 function factions.show_menu(player_name)
     local faction_name = factions.get_player_faction(player_name)
+    local formspec_menu
 
     if faction_name then
         local faction = factions.list[faction_name]
 
-        local members = ""
+        local members = {}
         for member_name, role in pairs(faction.members) do
-            members = members .. member_name .. " (" .. role .. "),"
+            table.insert(members, core.formspec_escape(member_name .. " (" .. role .. ")"))
         end
+        table.sort(members)
 
-        members = members:sub(1, -2)
+        formspec_menu =
+            "size[10,8]" ..
+            "background[-4,-3;18,14;background1.png]" ..
+            "label[0,1;Faction: " .. core.formspec_escape(faction_name) .. "]" ..
+            "label[0,2;Chief: " .. core.formspec_escape(faction.leader) .. "]" ..
+            "label[0,3;Members:]" ..
+            "dropdown[0,3.5;5.5,2;member_list;" .. table.concat(members, ",") .. ";1]" ..
+            "image_button[3,6;3,1;Leave.png;quitfac;]" ..
+            "image_button[6,6;3,1;relations.png;relations;]" ..
+            "image_button[6,1;3,1;See_claims.png;look_claims;]" ..
+            "image_button[3,1;3,1;home.png;go_home;]"
 
-        if faction.members[player_name] ~= "waiting" then
-            formspec_menu =
-                "size[10,8]" ..
-                "background[-4,-3;18,14;background1.png]" ..
-                "label[0,1;Faction: " .. faction_name .. "]" ..
-                "label[0,2;Chief: " .. faction.leader .. "]" ..
-                "label[0,3;Members:]" ..
-                "dropdown[0,3.5;5.5,2;member_list;" .. members .. ";1]" ..
+        if factions.can_manage(player_name, faction_name) then
+            formspec_menu = formspec_menu ..
                 "image_button[0,6;3,1;Invit.png;invite;]" ..
-                "image_button[3,6;3,1;Leave.png;quitfac;]" ..
-                "image_button[6,6;3,1;relations.png;relations;]" ..
-                "image_button[6,1;3,1;See_claims.png;look_claims;]" ..
-                "image_button[3,1;3,1;home.png;go_home;]"
-
-            local player_rank = faction.members[player_name]
-            if faction.leader == player_name or player_rank == "co-leader" then
-                formspec_menu = formspec_menu .. "image_button[6,4;3,1;Expel.png;kick;]"
-                formspec_menu = formspec_menu .. "image_button[6,5;3,1;roles.png;roles;]"
-            end
-        elseif faction.members[player_name] == "waiting" then
-            formspec_menu =
-                "size[10,8]" ..
-                "background[-4,-3;18,14;background1.png]" ..
-                "label[3.5,1.5;Waiting for faction]" ..
-                "image_button[2,3;5,1.5;invitations.png;invitform;]" ..
-                "image_button[2,5;5,1.5;Cancel.png;cancel_join;]"
-        else
-            formspec_menu =
-                "size[10,4]" ..
-                "background[-4,-3;18,10;background1.png]" ..
-                "label[3,0;You don't have a faction ?]" ..
-                "image_button[1,1;3,1;Create_faction.png;create_faction;]" ..
-                "image_button[4.5,1;3,1;join_faction;join_faction;]" ..
-                "image_button[2,2;5,1.5;invitations.png;invitform;]"
+                "image_button[6,4;3,1;Expel.png;kick;]" ..
+                "image_button[6,5;3,1;roles.png;roles;]"
         end
     else
         formspec_menu =
@@ -428,15 +580,18 @@ end
 -- Formspec for join a faction
 function factions.show_join_form(player_name)
     local faction_list = ""
+    local names = {}
     for faction_name, _ in pairs(factions.list) do
-        faction_list = faction_list .. faction_name .. ","
+        table.insert(names, faction_name)
     end
+    table.sort(names)
+    faction_list = table.concat(names, ",")
 
     local formspec =
         "size[4,4]" ..
         "background[-2,-2;8,8;background1.png]" ..
         "label[0.6,0.5;Choose a faction]" ..
-        "dropdown[0,1.3;4,1;target_faction;" .. faction_list .. ";0]"..
+        "dropdown[0,1.3;4,1;target_faction;" .. faction_list .. ";1]"..
         "image_button[0,2.5;2,1;Cancel.png;cancel;]" ..
         "image_button[1.9,2.5;2,1;Validate.png;join_fac;]"
     core.show_formspec(player_name, "factions:join_faction", formspec)
@@ -445,18 +600,24 @@ end
 -- Formspec for invite someone in your faction
 function factions.show_invit_form(player_name)
     local faction_list = ""
-    for faction_name, faction in pairs(factions.list) do
-        if faction.invitations and faction.invitations[player_name] then
-            faction_list = faction_list .. faction_name .. ","
+    factions.clean_expired_invitations()
+    local names = {}
+    for faction_name, t in pairs(factions.pending.invitations) do
+        if t[player_name] and factions.list[faction_name] then
+            table.insert(names, faction_name)
         end
     end
+    table.sort(names)
+    faction_list = table.concat(names, ",")
+    local label = #names > 0 and "Faction that invited you" or "No invitation"
     local formspec =
         "size[6,6]" ..
         "background[-2,-2;10,10;background1.png]" ..
-        "label[1.5,1;Faction that invited you]" ..
-        "dropdown[0.8,2.3;4,1;target_faction;" .. faction_list .. ";0]" ..
+        "label[1.5,1;" .. label .. "]" ..
+        "dropdown[0.8,2.3;4,1;target_faction;" .. faction_list .. ";1]" ..
         "image_button[0.8,3.5;2,1;Cancel.png;cancel;]" ..
-        "image_button[2.7,3.5;2,1;Validate.png;join_fac;]"
+        "image_button[2.7,3.5;2,1;Validate.png;join_fac;]" ..
+        "button[1.75,4.6;2,0.8;decline_fac;Decline]"
     core.show_formspec(player_name, "factions:invit_form", formspec)
 end
 
@@ -464,7 +625,10 @@ end
 -- Formspec for show the relations of the factions
 function factions.show_relations_form(player_name)
     local faction_name = factions.get_player_faction(player_name)
-    local faction = factions.list[faction_name]
+    local faction = faction_name and factions.list[faction_name]
+    if not faction then
+        return
+    end
     local allies_list = ""
     local enemies_list = ""
 
@@ -570,7 +734,10 @@ end
 -- Formspec for the roles of the faction
 function factions.show_roles_form(player_name)
     local faction_name = factions.get_player_faction(player_name)
-    local faction = factions.list[faction_name]
+    local faction = faction_name and factions.list[faction_name]
+    if not faction or not factions.can_manage(player_name, faction_name) then
+        return
+    end
 
     local member_list = ""
     local role_list = ""
@@ -681,6 +848,7 @@ function factions.show_kick_form(player_name)
 end
 
 -- Function for promote someone to chief of the faction
+factions.pending_promote = {}
 function factions.promote_to_chefdefac(player_name, target_member)
     local faction_name = factions.get_player_faction(player_name)
     if not faction_name then
@@ -698,6 +866,8 @@ function factions.promote_to_chefdefac(player_name, target_member)
         "background[-2,-2;9,7;background1.png]" ..
         "label[0.5,0.5;Are you sure you want to promote " .. target_member .. " to faction leader ?]" ..
         "button[0.5,1.5;2,1;confirm_promote;Confirmer]" .. "button[2.5,1.5;2,1;cancel_promote;Annuler]"
+
+    factions.pending_promote[player_name] = target_member
 
     core.show_formspec(player_name, "promote_confirmation", formspec)
 end
@@ -741,6 +911,11 @@ function factions.dissolve_faction(faction_name, player_name)
     factions.list[faction_name] = nil
     relations.data[faction_name] = nil
     factions.remove_claims(faction_name)
+    pending_clear_faction(faction_name)
+    if factions.homes[faction_name] then
+        factions.homes[faction_name] = nil
+        factions.save_homes()
+    end
 
     for other_faction, _ in pairs(relations.data) do
         relations.data[other_faction][faction_name] = nil
@@ -773,21 +948,25 @@ end
 
 -- Function for send a join invite to a player in a faction
 factions.send_join_invite = function(player_name, faction_name)
-    if faction_name == nil or faction_name == "" then
+    if faction_name == nil or faction_name == "" or not factions.list[faction_name] then
         return false, "Please select a valid faction."
     end
-    local faction = factions.list[faction_name]
+    if factions.get_player_faction(player_name) then
+        return false, "You are already in a faction."
+    end
+    -- Invited already: join directly
+    if pending_get("invitations", faction_name, player_name) then
+        return factions.join(player_name, faction_name)
+    end
+    if pending_get("join_requests", faction_name, player_name) then
+        return false, "You already asked to join '" .. faction_name .. "'."
+    end
     -- Record a join request (player asked to join); do NOT create an invitation entry
-    faction.join_requests = faction.join_requests or {}
-    local current_time = os.time()
-    faction.join_requests[player_name] = { sent_at = current_time }
-    core.chat_send_player(faction.leader, player_name .. " wants to join your faction, to accept, do: /f accept "..player_name.." else, do: /f refuse "..player_name)
-    core.register_on_joinplayer(
-            function(player)
-                if player:get_player_name() == faction.leader then
-                    core.chat_send_player(faction.leader, player_name .. " wants to join your faction, to accept, do: /f accept "..player_name.." else, do: /f refuse "..player_name)
-                end
-            end)
+    pending_set("join_requests", faction_name, player_name, os.time())
+    -- Offline leaders get one summarized reminder on login (see register_on_joinplayer)
+    notify_managers(faction_name, player_name .. " wants to join your faction, to accept, do: /f accept " ..
+        player_name .. " else, do: /f refuse " .. player_name)
+    return true, "Your join request has been sent to '" .. faction_name .. "'."
 end
 
 -- Formspec for quit confirm
@@ -810,12 +989,33 @@ function factions.assign_role(player_name, target_member, role)
     end
 
     local faction = factions.list[faction_name]
+    local my_role = faction.members[player_name]
 
     if not faction.members[target_member] then
         return false, target_member .. " is not a member of the faction."
     end
 
-    faction.members[target_member] = role 
+    -- Server side checks: the roles form can be forged by a client
+    local allowed
+    if faction.leader == player_name then
+        allowed = {["co-leader"] = true, membre = true, conseiller = true}
+    elseif my_role == "co-leader" then
+        allowed = {membre = true, conseiller = true}
+    else
+        return false, "Only the faction leader or a co-leader can assign roles."
+    end
+    if not allowed[role] then
+        return false, "You cannot assign the role " .. role .. "."
+    end
+    if target_member == faction.leader or target_member == player_name then
+        return false, "You cannot change the role of " .. target_member .. "."
+    end
+    if my_role == "co-leader" and faction.members[target_member] == "co-leader" then
+        return false, "A co-leader cannot change the role of another co-leader."
+    end
+
+    faction.members[target_member] = role
+    factions.save_factions()
     return true, target_member .. " was assigned the role " .. role .. "."
 end
 
@@ -854,16 +1054,10 @@ core.register_on_player_receive_fields(
             elseif fields.look_claims then
                 factions.show_claims(player_name)
             elseif fields.go_home then
-                factions.go_to_faction_home(player_name)
-            elseif fields.cancel_join then
-                local faction_name = factions.get_player_faction(player_name)
-                if faction_name == nil or faction_name == "" then
-                    return false, "You didn't ask to join a faction."
+                local _, msg = factions.go_to_faction_home(player_name)
+                if msg then
+                    core.chat_send_player(player_name, msg)
                 end
-                local faction = factions.list[faction_name]
-                faction.members[player_name] = nil
-                factions.show_menu(player_name)
-                return true, "You have cancelled your join request."
             end
 
         elseif formname == "factions:quit_confirmation" then
@@ -894,11 +1088,19 @@ core.register_on_player_receive_fields(
         
         elseif formname == "promote_confirmation" then
             if fields.confirm_promote then
-                local target_member = fields.target_member 
+                -- The target is remembered server side: never trust a client-sent name here
+                local target_member = factions.pending_promote[player_name]
+                factions.pending_promote[player_name] = nil
                 local faction_name = factions.get_player_faction(player_name)
-                local faction = factions.list[faction_name]
+                local faction = faction_name and factions.list[faction_name]
+                if not target_member or not faction or faction.leader ~= player_name
+                        or not faction.members[target_member] then
+                    return true
+                end
+                faction.members[player_name] = "co-leader"
                 faction.members[target_member] = "factionleader"
                 faction.leader = target_member
+                factions.save_factions()
                 core.chat_send_player(player_name, target_member .. " was promoted to faction leader.")
             elseif fields.cancel_promote then
                 factions.show_menu(player_name)
@@ -944,28 +1146,34 @@ core.register_on_player_receive_fields(
                     core.chat_send_player(player_name, "Please enter a valid name.")
                     return false
                 end
-                core.chat_send_player(player_name, "The invitation has been sent.")
-                factions.send_join_invite(player_name, target_faction)
+                local _, msg = factions.send_join_invite(player_name, target_faction)
+                core.chat_send_player(player_name, msg)
                 factions.show_menu(player_name)
             end
             
         elseif formname == "factions:invit_form" then
             if fields.cancel then
                 factions.show_menu(player_name)
-            elseif fields.join_fac then
+            elseif fields.join_fac or fields.decline_fac then
                 local target_faction = fields.target_faction
                 if target_faction == nil or target_faction == "" then
-                    return false, "Select a valid faction."
+                    core.chat_send_player(player_name, "Select a valid faction.")
+                    return true
                 end
-                factions.join(player_name, target_faction)
-                core.chat_send_player(player_name, "You have joined the faction "..target_faction ..".")
+                local _, msg
+                if fields.decline_fac then
+                    _, msg = factions.decline_invite(player_name, target_faction)
+                else
+                    _, msg = factions.join(player_name, target_faction)
+                end
+                core.chat_send_player(player_name, msg)
                 factions.show_menu(player_name)
             end
 
 
 
         elseif formname == "factions:relations_form" then
-            local target_faction
+            local target_faction, new_relation
             local your_faction = factions.get_player_faction(player_name)
         
             if fields.cancel then
@@ -1018,10 +1226,6 @@ core.register_on_player_receive_fields(
                     core.chat_send_player(player_name, msg)
                 end
                 factions.show_menu(player_name)
-            elseif target_player == "" then
-                core.chat_send_player(player_name, "Please enter a valid name.")
-                factions.show_menu(player_name)
-                factions.show_menu(player_name)
             elseif fields.cancel then
                 factions.show_menu(player_name)
             end
@@ -1032,7 +1236,7 @@ core.register_on_player_receive_fields(
                 local target_role = fields.target_role
                 local faction_name = factions.get_player_faction(player_name)
     
-                if target_member and target_role then
+                if target_member and target_member ~= "" and target_role and target_role ~= "" then
                     local success, msg = factions.assign_role(player_name, target_member, target_role)
                     core.chat_send_player(player_name, msg)
                 end
